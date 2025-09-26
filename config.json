@@ -9,9 +9,9 @@
             "fork_url": "https://github.boschdevcloud.com/ETAS-EDMS/repo-manager.git",
             "secrets": [ {"name":"SECRET_NAME", "value": "secret-value"} ],
             "variables": [ {"name":"VARIABLE_NAME", "value": "variable-value"} ],
-            "permissions": [
-                {"team_slug": "s-core", "permission": "admin"}
-            ]
+            "permissions": {
+                "s-core": "admin"
+            }
         }
     ]
 }
