@@ -48,17 +48,78 @@ class Repo:
     def set_secrets(self):
         self.set_secrets_or_vars(set_secrets=True)
 
+    ###############
+    # PERMISSIONS #
+    ###############
     def set_permissions(self):
         for permission in self.permissions:
             team_slug = permission["slug"]
             permission = permission["permission"]   
-            if subprocess.call([
+            self.add_permission(team_slug, permission)    
+            
+    def add_permission(self, team_slug, permission):
+        result = subprocess.run([
                 "gh", "api", 
                 "-X", "PUT",
                 f"/orgs/{self.org}/teams/{team_slug}/repos/{self.org}/{self.name}",
                 "-f", f"permission={permission}"
-            ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL) != 0:
-                raise ValueError(f"Failed to set permission {permission} for team {team_slug} on repo {self.name}")
+            ], capture_output=True, text=True)
+        if result.returncode != 0:
+            print(f"Error setting permission for team {team_slug}:")
+            print(f"stdout: {result.stdout}")
+            print(f"stderr: {result.stderr}")
+            raise ValueError(f"Failed to set permission {permission} for team {team_slug} on repo {self.name}")
+    
+    def remove_permission(self, team_slug):
+        result = subprocess.run([
+                "gh", "api", 
+                "-X", "DELETE",
+                f"/orgs/{self.org}/teams/{team_slug}/repos/{self.org}/{self.name}"
+            ], capture_output=True, text=True)
+        if result.returncode != 0:
+            print(f"Error removing permission for team {team_slug}:")
+            print(f"stdout: {result.stdout}")
+            print(f"stderr: {result.stderr}")
+            raise ValueError(f"Failed to remove permissions for team {team_slug} on repo {self.name}")
+
+    def update_permissions(self):
+        """Check current team permissions for the repository"""
+        # Get team permissions
+        teams_result = subprocess.run([
+            "gh", "api", f"repos/{self.org}/{self.name}/teams"
+        ], capture_output=True, text=True, check=True)
+
+        existing_perms = { perm["slug"]: perm["permission"] for perm in json.loads(teams_result.stdout) }
+
+        all_teams = set(existing_perms.keys()).union(set(self.permissions.keys()))
+        edited = ""
+        added = ""
+        removed = ""
+        unchanged = ""
+        for team in all_teams:
+            present_in_existing = team in existing_perms
+            present_in_config = team in self.permissions
+            if present_in_existing and present_in_config:
+                if existing_perms[team] != self.permissions[team]:
+                    edited += f"    {team}: {existing_perms[team]} => {self.permissions[team]}\n"
+                    self.add_permission(team, self.permissions[team])
+                else:
+                    unchanged += f"    {team}: {existing_perms[team]}\n"
+            elif not present_in_existing and present_in_config:
+                added += f"    {team}: {self.permissions[team]}\n"
+                self.add_permission(team, self.permissions[team])
+            elif present_in_existing and not present_in_config:
+                removed += f"    {team}: {existing_perms[team]}\n"
+                self.remove_permission(team)
+        print("Permissions:")
+        if edited:
+            print(f"  Edited:\n{edited}", end="")
+        if added:
+            print(f"  Added:\n{added}", end="")
+        if removed:
+            print(f"  Removed:\n{removed}", end="")
+        if unchanged:
+            print(f"  Unchanged:\n{unchanged}", end="")
 
     def create(self):
         print(f"Creating repo {self.name} in org {self.org}")
@@ -71,25 +132,25 @@ class Repo:
         print(f"Setting secrets for repo {self.name}")
         self.set_secrets()
 
-    def compare_permissions(self):
-        """Check current team permissions for the repository"""
-        # Get team permissions
-        teams_result = subprocess.run([
-            "gh", "api", f"repos/{self.org}/{self.name}/teams"
-        ], capture_output=True, text=True, check=True)
-
-        existing_perms = { perm["slug"]: perm["permission"] for perm in json.loads(teams_result.stdout) }
-
-        all_teams = set(existing_perms.keys()).union(set(self.permissions.keys()))
-        print(all_teams)
-
-
     def update(self):
         print(f"Updating repo {self.name} in org {self.org}")
         self.compare_permissions()
 
     def exists(self):
-        return subprocess.call(["gh", "api", f"repos/{self.org}/{self.name}"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL) == 0
+        result = subprocess.run([
+            "gh", "api", f"repos/{self.org}/{self.name}"
+        ], capture_output=True, text=True)
+
+        if result.returncode == 0:
+            return True
+
+        if "404" in result.stderr or "Not Found" in result.stderr:
+            return False
+
+        print(f"Error checking if repo {self.org}/{self.name} exists:")
+        print(f"stdout: {result.stdout}")
+        print(f"stderr: {result.stderr}")
+        raise ValueError(f"Unable to determine if repo {self.org}/{self.name} exists due to error (exit code {result.returncode})")
 
     def create_or_update(self):
         if self.exists():
