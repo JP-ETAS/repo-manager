@@ -1,17 +1,29 @@
 {
     "common":
     {
-        "org": "ETAS-EDMS"
+        "org": "ETAS-EDMS",
+        "permissions": {
+            "s-core": "admin"
+        },
+        "secrets": {},
+        "variables": {},
+        "hostname": "github.boschdevcloud.com"
     },
     "repos": [
         {
             "name": "repo-manager-1",
             "fork_url": "https://github.boschdevcloud.com/ETAS-EDMS/repo-manager.git",
-            "secrets": [ {"name":"SECRET_NAME", "value": "secret-value"} ],
-            "variables": [ {"name":"VARIABLE_NAME", "value": "variable-value"} ],
-            "permissions": {
-                "s-core": "admin"
+            "secrets": { 
+                "SECRET_NAME": "secret-value"
+            },
+            "variables": { 
+                "VARIABLE_NAME": "variable-value",
+                "VARIABLE_NAME1": "variable-value"
             }
+        },
+        {
+            "name": "checkout",
+            "fork_url": "https://github.com/actions/checkout.git"
         }
     ]
 }
