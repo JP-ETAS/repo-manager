@@ -17,7 +17,6 @@ class Repo:
         self.variables = self._get_field("variables")
         self.permissions = self._get_field("permissions")
         self.org = self._get_field("org")
-        self.hostname = self._get_field("hostname")
 
     def _get_field(self, field_name):
         """Gets a non-list field from a repo config, or from common if not found in repo config."""
@@ -25,13 +24,6 @@ class Repo:
         if field_value is None:
             raise ValueError(f"No value found for field {field_name}")
         return field_value
-
-    def check_variables(self):
-        existing_variables_json = subprocess.check_output(["gh", "api", f"repos/{self.org}/{self.name}/actions/variables", "--hostname", self.hostname])
-        existing_variables = json.loads(existing_variables_json.decode('utf-8'))
-        vars_list = [{"key": var["name"], "value": var["value"]} for var in existing_variables.get("variables", [])]
-
-        print(vars_list)
     
     def update_environment(self, environment: Environment):
         if environment == Environment.SECRET:
@@ -40,12 +32,13 @@ class Repo:
             environment_data = self.variables
 
         values_result = subprocess.run([
-            "gh", "api", f"repos/{self.org}/{self.name}/actions/{environment.value}s", "--hostname", self.hostname
+            "gh", "api", f"repos/{self.org}/{self.name}/actions/{environment.value}s"
         ], capture_output=True, text=True, check=True)
         existing_data = {value["name"]: value.get("value", "***") for value in json.loads(values_result.stdout).get(f"{environment.value}s", [])}
 
         all_data = set(existing_data.keys()).union(set(environment_data.keys()))
-
+        
+        to_add={}
         overwritten = ""
         edited = ""
         added = ""
@@ -57,18 +50,21 @@ class Repo:
             if present_in_existing and present_in_config:
                 if existing_data[value_name] == "***":
                     overwritten += f"    {value_name}: *** => ***\n"
-                    self.add_environment(environment, value_name, environment_data[value_name])
+                    to_add[value_name] = environment_data[value_name]
                 elif existing_data[value_name] != environment_data[value_name]:
                     edited += f"    {value_name}: {existing_data[value_name]} => {environment_data[value_name] if environment == Environment.VARIABLE else '***'}\n"
-                    self.add_environment(environment, value_name, environment_data[value_name])
+                    to_add[value_name] = environment_data[value_name]
                 else:
                     unchanged += f"    {value_name}: {existing_data[value_name]}\n"
             elif not present_in_existing and present_in_config:
                 added += f"    {value_name}: {environment_data[value_name] if environment == Environment.VARIABLE else '***'}\n"
-                self.add_environment(environment, value_name, environment_data[value_name])
+                to_add[value_name] = environment_data[value_name]
             elif present_in_existing and not present_in_config:
                 removed += f"    {value_name}: {existing_data[value_name]}\n"
                 self.remove_environment_value(environment, value_name)
+
+        if to_add:
+            self.add_environment_values(environment, to_add)
 
         print(f"{environment.value.capitalize()}s:")
         if overwritten:
@@ -82,11 +78,10 @@ class Repo:
         if unchanged:
             print(f"  Unchanged:\n{unchanged}", end="")
 
-    def remove_environment(self, environment: Environment, value_name):
+    def remove_environment_value(self, environment: Environment, value_name):
         result = subprocess.run([
             "gh", "api", "-X", "DELETE", 
-            f"repos/{self.org}/{self.name}/actions/{environment.value}s/{value_name}",
-            "--hostname", self.hostname
+            f"repos/{self.org}/{self.name}/actions/{environment.value}s/{value_name}"
         ], capture_output=True, text=True)
         if result.returncode != 0:
             print(f"Error deleting {environment.value}: {value_name}")
@@ -94,18 +89,23 @@ class Repo:
             print(f"stderr: {result.stderr}")
             raise ValueError(f"Failed to delete {environment.value} {value_name} from repo {self.name}")
 
-    def add_environment(self, environment: Environment, key, value):
-        result = subprocess.run([
-            "gh", "api", "-X", "PUT",
-            f"repos/{self.org}/{self.name}/actions/{environment.value}s/{key}",
-            "-f", f"{environment.value}={value}",
-            "--hostname", self.hostname
-        ], capture_output=True, text=True)
+    def add_environment_values(self, environment: Environment, values):
+        with tempfile.NamedTemporaryFile(mode='w+', delete=True) as temp_file:
+            for key, value in values.items():
+                temp_file.write(f"{key}={value}\n")
+            temp_file.flush()
+            
+            result = subprocess.run([
+                "gh", environment.value, "set", 
+                "--repo", f"{self.org}/{self.name}",
+                "-f", temp_file.name
+            ], capture_output=True, text=True)
+            
         if result.returncode != 0:
-            print(f"Error setting {environment.value} {key}:")
+            print(f"Error setting {environment.value}:")
             print(f"stdout: {result.stdout}")
             print(f"stderr: {result.stderr}")
-            raise ValueError(f"Failed to set {environment.value} {key} for repo {self.name}")
+            raise ValueError(f"Failed to set {environment.value} for repo {self.name}")
 
     def update_variables(self):
         self.update_environment(Environment.VARIABLE)
@@ -114,12 +114,10 @@ class Repo:
         self.update_environment(Environment.SECRET)
 
     def set_variables(self):
-        for key, value in self.variables.items():
-            self.add_environment(Environment.VARIABLE, key, value)
+        self.add_environment_values(Environment.VARIABLE, self.variables)
 
     def set_secrets(self):
-        for key, value in self.secrets.items():
-            self.add_environment(Environment.SECRET, key, value)
+        self.add_environment_values(Environment.SECRET, self.secrets)
 
     ###############
     # PERMISSIONS #
@@ -135,7 +133,7 @@ class Repo:
                 "gh", "api", 
                 "-X", "PUT",
                 f"/orgs/{self.org}/teams/{team_slug}/repos/{self.org}/{self.name}",
-                "-f", f"permission={permission}", "--hostname", self.hostname
+                "-f", f"permission={permission}"
             ], capture_output=True, text=True)
         if result.returncode != 0:
             print(f"Error setting permission for team {team_slug}:")
@@ -147,7 +145,7 @@ class Repo:
         result = subprocess.run([
                 "gh", "api", 
                 "-X", "DELETE",
-                f"/orgs/{self.org}/teams/{team_slug}/repos/{self.org}/{self.name}", "--hostname", self.hostname
+                f"/orgs/{self.org}/teams/{team_slug}/repos/{self.org}/{self.name}"
             ], capture_output=True, text=True)
         if result.returncode != 0:
             print(f"Error removing permission for team {team_slug}:")
@@ -159,7 +157,7 @@ class Repo:
         """Check current team permissions for the repository"""
         # Get team permissions
         teams_result = subprocess.run([
-            "gh", "api", f"repos/{self.org}/{self.name}/teams", "--hostname", self.hostname
+            "gh", "api", f"repos/{self.org}/{self.name}/teams"
         ], capture_output=True, text=True, check=True)
 
         existing_perms = { perm["slug"]: perm["permission"] for perm in json.loads(teams_result.stdout) }
@@ -196,14 +194,14 @@ class Repo:
 
     def create(self):
         print(f"Creating repo {self.name} in org {self.org}")
-        if subprocess.call(["gh", "repo", "fork", self.fork_url, "--clone=false", "--org", self.org, "--default-branch-only", "--hostname", self.hostname]) != 0:
+        if subprocess.call(["gh", "repo", "fork", self.fork_url, "--clone=false", "--org", self.org, "--default-branch-only"]) != 0:
             raise ValueError(f"Failed to fork repo {self.fork_url} into org {self.org}")
         print(f"Setting permissions for repo {self.name}")
         self.set_permissions()
         print(f"Setting variables for repo {self.name}")
         self.set_variables()
-        #print(f"Setting secrets for repo {self.name}")
-        #self.set_secrets()
+        print(f"Setting secrets for repo {self.name}")
+        self.set_secrets()
 
     def update(self):
         print(f"Updating repo {self.name} in org {self.org}")
@@ -211,12 +209,12 @@ class Repo:
         self.update_permissions()
         print(f"Setting variables for repo {self.name}")
         self.update_variables()
-        #print(f"Setting secrets for repo {self.name}")
-        #self.update_secrets()
+        print(f"Setting secrets for repo {self.name}")
+        self.update_secrets()
 
     def exists(self):
         result = subprocess.run([
-            "gh", "api", f"repos/{self.org}/{self.name}", "--hostname", self.hostname
+            "gh", "api", f"repos/{self.org}/{self.name}"
         ], capture_output=True, text=True)
 
         if result.returncode == 0:

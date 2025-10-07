@@ -6,8 +6,7 @@
             "s-core": "admin"
         },
         "secrets": {},
-        "variables": {},
-        "hostname": "github.boschdevcloud.com"
+        "variables": {}
     },
     "repos": [
         {
@@ -20,10 +19,6 @@
                 "VARIABLE_NAME": "variable-value",
                 "VARIABLE_NAME1": "variable-value"
             }
-        },
-        {
-            "name": "checkout",
-            "fork_url": "https://github.com/actions/checkout.git"
         }
     ]
 }
