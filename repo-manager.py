@@ -119,15 +119,32 @@ class Repo:
     def set_secrets(self):
         self.add_environment_values(Environment.SECRET, self.secrets)
 
+
+    def lock_main_branch(self):
+        result = subprocess.run([
+            "gh", "api", f"repos/{self.org}/{self.name}/branches/main/protection",
+            "--method", "PUT",
+            "--field", "enforce_admins=true",
+            "--field", "required_pull_request_reviews=null",
+            "--field", "required_status_checks=null",
+            "--field", "restrictions=null",
+            "--field", "lock_branch=true",
+            "--field", "allow_fork_syncing=true"
+        ], capture_output=True, text=True)
+        
+        if result.returncode != 0:
+            print(f"Error locking main branch for repo {self.name}:")
+            print(f"stdout: {result.stdout}")
+            print(f"stderr: {result.stderr}")
+            raise ValueError(f"Failed to lock main branch for repo {self.name}")
+
     ###############
     # PERMISSIONS #
     ###############
     def set_permissions(self):
-        for permission in self.permissions:
-            team_slug = permission["slug"]
-            permission = permission["permission"]   
-            self.add_permission(team_slug, permission)    
-            
+        for team_slug, permission in self.permissions.items():
+            self.add_permission(team_slug, permission)
+
     def add_permission(self, team_slug, permission):
         result = subprocess.run([
                 "gh", "api", 
@@ -202,15 +219,21 @@ class Repo:
         self.set_variables()
         print(f"Setting secrets for repo {self.name}")
         self.set_secrets()
+        print(f"Locking main branch for repo {self.name}")
+        self.lock_main_branch()
 
     def update(self):
         print(f"Updating repo {self.name} in org {self.org}")
+        if subprocess.call(["gh", "repo", "sync", f"{self.org}/{self.name}"]) != 0:
+            raise ValueError(f"Failed to sync repo {self.name} in org {self.org}")
         print(f"Setting permissions for repo {self.name}")
         self.update_permissions()
         print(f"Setting variables for repo {self.name}")
         self.update_variables()
         print(f"Setting secrets for repo {self.name}")
         self.update_secrets()
+        print(f"Locking main branch for repo {self.name}")
+        self.lock_main_branch()
 
     def exists(self):
         result = subprocess.run([
