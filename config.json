@@ -1,0 +1,24 @@
+{
+    "common":
+    {
+        "org": "ETAS-EDMS",
+        "permissions": {
+            "s-core": "admin"
+        },
+        "secrets": {},
+        "variables": {}
+    },
+    "repos": [
+        {
+            "name": "repo-manager-1",
+            "fork_url": "https://github.boschdevcloud.com/ETAS-EDMS/repo-manager.git",
+            "secrets": { 
+                "SECRET_NAME": "secret-value"
+            },
+            "variables": { 
+                "VARIABLE_NAME": "variable-value",
+                "VARIABLE_NAME1": "variable-value"
+            }
+        }
+    ]
+}
