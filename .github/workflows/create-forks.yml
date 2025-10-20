@@ -1,0 +1,15 @@
+name: Run Repo Manager
+
+on:
+  workflow_dispatch:
+
+jobs:
+  run-repo-manager:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Run repo manager script
+        run: |
+          python repo_manager.py
