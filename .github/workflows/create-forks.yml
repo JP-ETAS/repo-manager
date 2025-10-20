@@ -12,4 +12,4 @@ jobs:
 
       - name: Run repo manager script
         run: |
-          python repo_manager.py
+          python repo-manager.py
