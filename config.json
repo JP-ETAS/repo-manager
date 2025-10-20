@@ -1,17 +1,15 @@
 {
     "common":
     {
-        "org": "ETAS-EDMS",
-        "permissions": {
-            "s-core": "admin"
-        },
+        "org": "JP-ETAS",
+        "permissions": {},
         "secrets": {},
         "variables": {}
     },
     "repos": [
         {
             "name": "repo-manager-1",
-            "fork_url": "https://github.boschdevcloud.com/ETAS-EDMS/repo-manager.git",
+            "fork_url": "https://github.com/JP-ETAS/repo-manager.git",
             "secrets": { 
                 "SECRET_NAME": "secret-value"
             },
