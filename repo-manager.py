@@ -90,6 +90,8 @@ class Repo:
             raise ValueError(f"Failed to delete {environment.value} {value_name} from repo {self.name}")
 
     def add_environment_values(self, environment: Environment, values):
+        if not values:
+            return
         with tempfile.NamedTemporaryFile(mode='w+', delete=True) as temp_file:
             for key, value in values.items():
                 temp_file.write(f"{key}={value}\n")
