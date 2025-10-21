@@ -12,6 +12,6 @@ jobs:
 
       - name: Run repo manager script
         env:
-          GH_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ secrets.TEST_REPO_MANAGER_PAT }}
         run: |
           python repo-manager.py
