@@ -211,7 +211,9 @@ class Repo:
 
     def create(self):
         print(f"Creating repo {self.name} in org {self.org}")
-        if subprocess.call(["gh", "repo", "fork", self.fork_url, "--clone=false", "--org", self.org, "--default-branch-only"]) != 0:
+        # Re-add when testing in an org
+        # if subprocess.call(["gh", "repo", "fork", self.fork_url, "--clone=false", "--org", self.org, "--default-branch-only"]) != 0:
+        if subprocess.call(["gh", "repo", "fork", self.fork_url, "--clone=false", "--default-branch-only"]) != 0:
             raise ValueError(f"Failed to fork repo {self.fork_url} into org {self.org}")
         print(f"Setting permissions for repo {self.name}")
         self.set_permissions()
