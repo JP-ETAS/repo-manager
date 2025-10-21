@@ -8,7 +8,13 @@ class Environment(Enum):
     VARIABLE = "variable"
 
 class Repo:
+    """Class representing a repository to be managed."""
+
     def __init__(self, repo, common):
+        """Initializes a Repo instance with configuration data.
+
+        Reads fields from the repo config, falling back to common config if not present.
+        """
         self._common = common
         self._repo = repo
         self.name = self._get_field("name")
@@ -26,6 +32,11 @@ class Repo:
         return field_value
     
     def update_environment(self, environment: Environment):
+        """Updates secrets or variables for the repository.
+
+        Compares existing secrets/variables with those in the config and adds/edits/removes as necessary.
+        Secret values are not retrievable from GitHub, so if a secret exists in both config and repo it is always updated.
+        """
         if environment == Environment.SECRET:
             environment_data = self.secrets
         else:
@@ -79,6 +90,10 @@ class Repo:
             print(f"  Unchanged:\n{unchanged}", end="")
 
     def remove_environment_value(self, environment: Environment, value_name):
+        """Removes a secret or variable from the repository.
+        
+        TODO: Move to use gh CLI command instead of API.
+        """
         result = subprocess.run([
             "gh", "api", "-X", "DELETE", 
             f"repos/{self.org}/{self.name}/actions/{environment.value}s/{value_name}"
@@ -90,6 +105,10 @@ class Repo:
             raise ValueError(f"Failed to delete {environment.value} {value_name} from repo {self.name}")
 
     def add_environment_values(self, environment: Environment, values):
+        """Adds secrets or variables to the repository in bulk.
+
+        Writes all key-value pairs to a temporary file that is then passed to the gh CLI.
+        """
         if not values:
             return
         with tempfile.NamedTemporaryFile(mode='w+', delete=True) as temp_file:
@@ -110,19 +129,27 @@ class Repo:
             raise ValueError(f"Failed to set {environment.value} for repo {self.name}")
 
     def update_variables(self):
+        """Wrapper for environment update for variables."""
         self.update_environment(Environment.VARIABLE)
 
     def update_secrets(self):
+        """Wrapper for environment update for secrets."""
         self.update_environment(Environment.SECRET)
 
     def set_variables(self):
+        """Wrapper for add environment values for variables."""
         self.add_environment_values(Environment.VARIABLE, self.variables)
 
     def set_secrets(self):
+        """Wrapper for add environment values for secrets."""
         self.add_environment_values(Environment.SECRET, self.secrets)
 
 
     def lock_main_branch(self):
+        """Locks the main branch of the repository.
+        
+        Uses GH API through the GH CLI as there is no GH CLI command for this.
+        """
         result = subprocess.run([
             "gh", "api", f"repos/{self.org}/{self.name}/branches/main/protection",
             "--method", "PUT",
@@ -140,14 +167,16 @@ class Repo:
             print(f"stderr: {result.stderr}")
             raise ValueError(f"Failed to lock main branch for repo {self.name}")
 
-    ###############
-    # PERMISSIONS #
-    ###############
     def set_permissions(self):
+        """Sets team permissions for the repository."""
         for team_slug, permission in self.permissions.items():
             self.add_permission(team_slug, permission)
 
     def add_permission(self, team_slug, permission):
+        """Adds a permission for a team on the repository.
+        
+        Uses GH API through the GH CLI as there is no GH CLI command for this.
+        """
         result = subprocess.run([
                 "gh", "api", 
                 "-X", "PUT",
@@ -161,6 +190,10 @@ class Repo:
             raise ValueError(f"Failed to set permission {permission} for team {team_slug} on repo {self.name}")
     
     def remove_permission(self, team_slug):
+        """Removes a team's permission on the repository.
+        
+        Uses GH API through the GH CLI as there is no GH CLI command for this.
+        """
         result = subprocess.run([
                 "gh", "api", 
                 "-X", "DELETE",
@@ -173,7 +206,10 @@ class Repo:
             raise ValueError(f"Failed to remove permissions for team {team_slug} on repo {self.name}")
 
     def update_permissions(self):
-        """Check current team permissions for the repository"""
+        """Updates current team permissions for the repository.
+
+        Compares existing permissions with those in the config and adds/edits/removes as necessary.
+        """
         # Get team permissions
         teams_result = subprocess.run([
             "gh", "api", f"repos/{self.org}/{self.name}/teams"
@@ -212,6 +248,7 @@ class Repo:
             print(f"  Unchanged:\n{unchanged}", end="")
 
     def create(self):
+        """Creates a new repository and configures it."""
         print(f"Creating repo {self.name} in org {self.org}")
         # Re-add when testing in an org
         # if subprocess.call(["gh", "repo", "fork", self.fork_url, "--clone=false", "--org", self.org, "--default-branch-only"]) != 0:
@@ -227,6 +264,7 @@ class Repo:
         self.lock_main_branch()
 
     def update(self):
+        """Updates an existing repository's configuration."""
         print(f"Updating repo {self.name} in org {self.org}")
         if subprocess.call(["gh", "repo", "sync", f"{self.org}/{self.name}"]) != 0:
             raise ValueError(f"Failed to sync repo {self.name} in org {self.org}")
@@ -240,6 +278,7 @@ class Repo:
         self.lock_main_branch()
 
     def exists(self):
+        """Checks if the repository exists in the organization."""
         result = subprocess.run([
             "gh", "api", f"repos/{self.org}/{self.name}"
         ], capture_output=True, text=True)
@@ -256,13 +295,15 @@ class Repo:
         raise ValueError(f"Unable to determine if repo {self.org}/{self.name} exists due to error (exit code {result.returncode})")
 
     def create_or_update(self):
+        """Creates or updates the repository based on its existence."""
         if self.exists():
             self.update()
         else:
             self.create()
 
-with open("config.json", "r") as config_file:
-    config = json.load(config_file)
+if __name__ == "__main__":
+    with open("config.json", "r") as config_file:
+        config = json.load(config_file)
 
-for repo in config.get("repos", []):
-    Repo(repo, config["common"]).create_or_update()
+    for repo in config.get("repos", []):
+        Repo(repo, config["common"]).create_or_update()
