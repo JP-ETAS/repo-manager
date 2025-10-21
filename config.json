@@ -8,15 +8,22 @@
     },
     "repos": [
         {
-            "name": "repo-manager-1",
-            "fork_url": "https://github.com/JP-ETAS/repo-manager.git",
+            "name": "checkout",
+            "fork_url": "https://github.com/actions/checkout.git",
             "secrets": { 
                 "SECRET_NAME": "secret-value"
             },
             "variables": { 
-                "VARIABLE_NAME": "variable-value",
-                "VARIABLE_NAME1": "variable-value"
+                "VARIABLE_NAME": "variable-value"
             }
+        },
+        {
+            "name": "download-artifact",
+            "fork_url": "https://github.com/actions/download-artifact.git"
+        },
+        {
+            "name": "upload-artifact",
+            "fork_url": "https://github.com/actions/upload-artifact.git"
         }
     ]
 }
