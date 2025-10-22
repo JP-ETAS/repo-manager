@@ -19,7 +19,10 @@
         },
         {
             "name": "download-artifact",
-            "fork_url": "https://github.com/actions/download-artifact.git"
+            "fork_url": "https://github.com/actions/download-artifact.git",
+            "variables": { 
+                "VARIABLE_NAME2": "variable-value"
+            }
         },
         {
             "name": "upload-artifact",
